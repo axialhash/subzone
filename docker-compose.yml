@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: subzone
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: subzone
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - subzone-net
+
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    environment:
+      DATABASE_URL: postgresql://subzone:${POSTGRES_PASSWORD:-changeme}@db:5432/subzone?schema=public
+      ROOT_DOMAIN: ${ROOT_DOMAIN:-subzone.dev}
+      BRAND_NAME: ${BRAND_NAME:-}
+      NEXT_PUBLIC_ROOT_DOMAIN: ${NEXT_PUBLIC_ROOT_DOMAIN:-${ROOT_DOMAIN:-subzone.dev}}
+      NEXT_PUBLIC_BRAND_NAME: ${NEXT_PUBLIC_BRAND_NAME:-${BRAND_NAME:-}}
+      AUTH_GITHUB_ID: ${AUTH_GITHUB_ID}
+      AUTH_GITHUB_SECRET: ${AUTH_GITHUB_SECRET}
+      AUTH_SECRET: ${AUTH_SECRET}
+      BOOTSTRAP_ADMIN_EMAILS: ${BOOTSTRAP_ADMIN_EMAILS:-}
+      ADMIN_EMAIL_DOMAINS: ${ADMIN_EMAIL_DOMAINS:-}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      CLOUDFLARE_ZONE_ID: ${CLOUDFLARE_ZONE_ID:-}
+    depends_on:
+      - db
+    networks:
+      - subzone-net
+
+volumes:
+  pgdata:
+
+networks:
+  subzone-net:
