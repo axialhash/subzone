@@ -1,14 +1,7 @@
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
 import { requireAuth } from '@/lib/auth';
 import { addDnsRecordAction, removeDnsRecord, deleteRecord } from '@/lib/actions';
-
-const DnsRecordSchema = z.object({
-  type: z.enum(['A', 'CNAME', 'TXT']),
-  name: z.string().min(1),
-  content: z.string().min(1),
-  proxied: z.boolean().optional(),
-});
+import { dnsRecordSchema } from '@/lib/validation';
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -27,9 +20,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const user = await requireAuth();
     const { id } = await params;
     const body = await req.json();
-    const parsed = DnsRecordSchema.safeParse(body);
+    const parsed = dnsRecordSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Invalid DNS record data' }, { status: 400 });
+      const error = parsed.error.issues[0]?.message ?? 'Invalid DNS record data';
+      return NextResponse.json({ error }, { status: 400 });
     }
     await addDnsRecordAction(id, user.id, parsed.data);
     return NextResponse.json({ ok: true });

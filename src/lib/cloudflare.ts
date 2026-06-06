@@ -128,12 +128,13 @@ export async function createDnsRecord(spec: DnsRecordSpec) {
   const fqdn = assertInZone(
     spec.name.includes(".") ? spec.name : `${spec.name}.${ROOT_DOMAIN}`
   );
+  const proxied = spec.proxied ?? spec.type !== "TXT";
   const body = {
     type: spec.type,
     name: fqdn,
     content: spec.content,
-    proxied: spec.proxied ?? spec.type !== "TXT",
-    ttl: spec.ttl ?? (spec.proxied ? 1 : 3600),
+    proxied,
+    ttl: spec.ttl ?? (proxied ? 1 : 3600),
   };
   return cfFetch<{
     id: string;

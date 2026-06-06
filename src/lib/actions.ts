@@ -186,6 +186,64 @@ export async function revokeSubdomain(name: string) {
 
 export async function syncFromCloudflare() {
   await requireAdmin();
-  // Placeholder — implement CF→DB sync per your DNS provider
-  return { ok: true, synced: 0 };
+
+  const { listAllDnsRecords } = await import("@/lib/cloudflare");
+  const { ROOT_DOMAIN } = await import("@/lib/config");
+
+  const cfRecords = await listAllDnsRecords();
+  const suffix = "." + ROOT_DOMAIN;
+
+  // Group records by subdomain prefix
+  const bySubdomain = new Map<string, typeof cfRecords>();
+  for (const rec of cfRecords) {
+    // Only include records that are direct children of ROOT_DOMAIN
+    if (rec.name === ROOT_DOMAIN || !rec.name.endsWith(suffix)) continue;
+    const prefix = rec.name.slice(0, -suffix.length);
+    // Skip nested subdomains (e.g. blog.abel.subzone.dev)
+    if (prefix.includes(".")) continue;
+    const list = bySubdomain.get(prefix) ?? [];
+    list.push(rec);
+    bySubdomain.set(prefix, list);
+  }
+
+  let created = 0;
+  let skipped = 0;
+
+  for (const [name, records] of bySubdomain) {
+    // Upsert the subdomain in DB (only if not already tracked)
+    const existing = await prisma.subdomain.findUnique({ where: { name } });
+    let subId: string;
+    if (existing) {
+      subId = existing.id;
+      skipped++;
+    } else {
+      const sub = await prisma.subdomain.create({
+        data: { name, userId: null, status: "active" },
+      });
+      subId = sub.id;
+      created++;
+    }
+
+    // Sync DNS records — only add records not already in DB
+    const existingRecords = await prisma.dnsRecord.findMany({
+      where: { subdomainId: subId },
+    });
+    const existingCfIds = new Set(existingRecords.map((r) => r.cloudflareRecordId));
+
+    for (const cf of records) {
+      if (existingCfIds.has(cf.id)) continue;
+      await prisma.dnsRecord.create({
+        data: {
+          subdomainId: subId,
+          cloudflareRecordId: cf.id,
+          type: cf.type,
+          content: cf.content,
+          proxied: cf.proxied,
+        },
+      });
+    }
+  }
+
+  revalidatePath("/admin");
+  return { ok: true, created, skipped, totalRecords: cfRecords.length };
 }

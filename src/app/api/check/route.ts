@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { isNameReserved } from '@/lib/admin';
+import { validateSubdomainFormat } from '@/lib/validation';
 
 const CheckSchema = z.object({
   name: z.string().min(3).max(24).regex(/^[a-z0-9-]+$/),
@@ -14,7 +15,13 @@ export async function GET(req: Request) {
     return NextResponse.json({ available: false, reason: 'Invalid format' });
   }
 
-  // Check reserved names (DB + static)
+  // Full validation: format, static reserved list, patterns, profanity
+  const validation = validateSubdomainFormat(parsed.data.name);
+  if (!validation.ok) {
+    return NextResponse.json({ available: false, reason: validation.reason });
+  }
+
+  // Check reserved names (DB)
   if (await isNameReserved(parsed.data.name)) {
     return NextResponse.json({ available: false, reason: 'Reserved' });
   }

@@ -30,8 +30,6 @@ export const TIER_CONFIG: Record<number, TierConfig> = {
   2: { minDays: 180, limit: 2 },
 };
 
-export const MAX_SUBDOMAINS_PER_USER = 2;
-
 // ── Subdomain validation ────────────────────────────────────────
 export const SUBDOMAIN_MIN_LENGTH = 3;
 export const SUBDOMAIN_MAX_LENGTH = 24;

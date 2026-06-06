@@ -26,28 +26,49 @@ export function RecordEditor({ record }: RecordEditorProps) {
   const [content, setContent] = useState('');
   const [proxied, setProxied] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const router = useRouter();
 
   const addRecord = async () => {
     if (!content.trim()) return;
     setLoading(true);
-    await fetch(`/api/records/${record.id}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, name: record.name, content: content.trim(), proxied }),
-    });
-    setContent('');
-    setLoading(false);
-    router.refresh();
+    setError('');
+    try {
+      const res = await fetch(`/api/records/${record.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, name: record.name, content: content.trim(), proxied }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? 'Failed to add record');
+        return;
+      }
+      setContent('');
+      router.refresh();
+    } catch {
+      setError('Network error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const removeRecord = async (dnsRecordId: string) => {
-    await fetch(`/api/records/${record.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ recordId: dnsRecordId }),
-    });
-    router.refresh();
+    try {
+      const res = await fetch(`/api/records/${record.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recordId: dnsRecordId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error ?? 'Failed to remove record');
+        return;
+      }
+      router.refresh();
+    } catch {
+      alert('Network error');
+    }
   };
 
   return (
@@ -116,6 +137,7 @@ export function RecordEditor({ record }: RecordEditorProps) {
             {loading ? '...' : 'Add'}
           </button>
         </div>
+        {error && <p className="text-sm text-destructive">{error}</p>}
       </div>
     </div>
   );

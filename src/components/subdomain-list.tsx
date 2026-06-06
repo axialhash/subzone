@@ -43,8 +43,17 @@ export function SubdomainList({ records }: { records: Record[] }) {
             <button
               onClick={async () => {
                 if (!confirm(`Delete ${r.name}.${CLIENT_ROOT_DOMAIN}?`)) return;
-                await fetch(`/api/records/${r.id}`, { method: 'DELETE' });
-                router.refresh();
+                try {
+                  const res = await fetch(`/api/records/${r.id}`, { method: 'DELETE' });
+                  const data = await res.json();
+                  if (!res.ok) {
+                    alert(data.error ?? 'Failed to delete');
+                    return;
+                  }
+                  router.refresh();
+                } catch {
+                  alert('Network error');
+                }
               }}
               className="text-xs px-3 py-1.5 rounded border text-destructive hover:bg-destructive/10 transition-colors"
             >

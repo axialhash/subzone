@@ -16,6 +16,8 @@ export async function POST(req: Request) {
       });
     } else if (action === 'remove') {
       await prisma.adminAllowlist.deleteMany({ where: { email: normalized } });
+    } else {
+      return NextResponse.json({ error: 'Invalid action. Use "add" or "remove".' }, { status: 400 });
     }
 
     return NextResponse.json({ ok: true });

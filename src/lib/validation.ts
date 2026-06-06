@@ -9,7 +9,6 @@ import {
   SUBDOMAIN_MIN_LENGTH,
   SUBDOMAIN_MAX_LENGTH,
   SUBDOMAIN_REGEX,
-  MAX_SUBDOMAINS_PER_USER,
 } from "@/lib/config";
 import {
   RESERVED_SUBDOMAIN_NAMES,
@@ -139,6 +138,7 @@ function isValidCname(v: string): boolean {
  */
 export const dnsRecordSchema = z.object({
   type: z.enum(["A", "CNAME", "TXT"]),
+  name: z.string().min(1, "Subdomain name required"),
   content: z
     .string()
     .min(1, "Content required")
@@ -195,4 +195,4 @@ export function validateDnsPatchContent(
   return { ok: true };
 }
 
-export { MAX_SUBDOMAINS_PER_USER };
+
