@@ -3,6 +3,10 @@
  *
  * GitHub OAuth only. Swap the root domain, change eligibility tiers,
  * tweak reserved names — all in one place.
+ *
+ * NOTE: Tier config and platform-wide limits now live in PlatformSettings
+ * (managed via /admin/settings). The TIER_CONFIG export here is kept for
+ * backward compatibility but eligibility.ts now reads from settings.
  */
 
 // ── Root domain ─────────────────────────────────────────────────
@@ -18,7 +22,7 @@ export function bootstrapAdminEmails(): string[] {
   return readList("BOOTSTRAP_ADMIN_EMAILS");
 }
 
-// ── Eligibility tiers ───────────────────────────────────────────
+// ── Eligibility tiers (legacy — prefer getPlatformConfig()) ────
 export interface TierConfig {
   minDays: number;
   limit: number;
@@ -36,7 +40,8 @@ export const SUBDOMAIN_MAX_LENGTH = 24;
 export const SUBDOMAIN_REGEX = /^[a-z0-9-]+$/;
 
 // ── DNS provider ────────────────────────────────────────────────
-export const DNS_PROVIDER = (process.env.DNS_PROVIDER as "cloudflare") ?? "cloudflare";
+export const DNS_PROVIDER =
+  (process.env.DNS_PROVIDER as "cloudflare") ?? "cloudflare";
 
 export function cloudflareApiToken(): string {
   const token = process.env.CLOUDFLARE_API_TOKEN;

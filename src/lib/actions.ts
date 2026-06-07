@@ -151,7 +151,16 @@ export async function getAllUsers() {
   await requireAdmin();
   return prisma.user.findMany({
     orderBy: { createdAt: "desc" },
-    include: { _count: { select: { subdomains: true } } },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      isAdmin: true,
+      subdomainLimit: true,
+      githubLogin: true,
+      createdAt: true,
+      _count: { select: { subdomains: true } },
+    },
   });
 }
 
@@ -246,4 +255,56 @@ export async function syncFromCloudflare() {
 
   revalidatePath("/admin");
   return { ok: true, created, skipped, totalRecords: cfRecords.length };
+}
+
+// ── Admin user management ──────────────────────────────────────
+
+export async function updateUser(
+  userId: string,
+  data: { subdomainLimit?: number | null; isAdmin?: boolean }
+) {
+  const admin = await requireAdmin();
+  if (admin.id === userId && data.isAdmin === false) {
+    throw new Error("Cannot remove your own admin status");
+  }
+
+  const updateData: Record<string, unknown> = {};
+  if ("subdomainLimit" in data) {
+    updateData.subdomainLimit = data.subdomainLimit ?? null;
+  }
+  if ("isAdmin" in data) {
+    updateData.isAdmin = data.isAdmin;
+    updateData.role = data.isAdmin ? "admin" : "user";
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    throw new Error("No fields to update");
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: updateData,
+  });
+
+  revalidatePath("/admin/users");
+  return { ok: true, user: updated };
+}
+
+export async function getPlatformSettings() {
+  await requireAdmin();
+  const { getPlatformConfig, getAllSettings } = await import("@/lib/settings");
+  const config = await getPlatformConfig();
+  const raw = await getAllSettings();
+  return { config, raw };
+}
+
+export async function updatePlatformSettings(
+  data: Record<string, string>
+) {
+  await requireAdmin();
+  const { updatePlatformConfig } = await import("@/lib/settings");
+  await updatePlatformConfig(data);
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin");
+  return { ok: true };
 }

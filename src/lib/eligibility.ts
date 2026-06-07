@@ -2,25 +2,26 @@
  * Eligibility logic for subdomain claims.
  *
  * Determines how many subdomains a user can claim based on their
- * GitHub account age and email verification status. Fully
- * configurable via the TIER_CONFIG object in config.ts.
+ * GitHub account age, email verification status, and platform settings.
+ *
+ * Priority:
+ *   1. Admin → unlimited
+ *   2. Per-user subdomainLimit override (set by admin in dashboard)
+ *   3. Platform-wide tier config (set by admin in /admin/settings)
+ *   4. Hardcoded defaults in settings.ts
  */
 
 import { prisma } from "@/lib/prisma";
-import { TIER_CONFIG } from "@/lib/config";
+import { getPlatformConfig } from "@/lib/settings";
 
 export type Tier = 0 | 1 | 2;
 
 /**
  * Determines the claim tier for a user based on their GitHub account age
  * and email verification status.
- *
- * Default tier ladder (configurable in config.ts):
- *   Tier 0: < 30 days old OR email not verified → 0 claims (browse only)
- *   Tier 1: 30 days – 6 months → 1 subdomain
- *   Tier 2: 6+ months → 2 subdomains (matches existing cap)
  */
 export async function claimTierFor(userId: string): Promise<Tier> {
+  const config = await getPlatformConfig();
   const u = await prisma.user.findUniqueOrThrow({
     where: { id: userId },
     select: { githubCreatedAt: true, githubEmailVerified: true },
@@ -30,7 +31,7 @@ export async function claimTierFor(userId: string): Promise<Tier> {
   const days = ageMs / (1000 * 60 * 60 * 24);
 
   // Walk tiers from highest to lowest, find first match
-  const tiers = Object.entries(TIER_CONFIG)
+  const tiers = Object.entries(config.tiers)
     .map(([k, v]) => ({ tier: Number(k) as Tier, ...v }))
     .sort((a, b) => b.minDays - a.minDays);
 
@@ -40,11 +41,14 @@ export async function claimTierFor(userId: string): Promise<Tier> {
   return 0;
 }
 
-export const TIER_LIMITS: Record<Tier, number> = {
-  0: TIER_CONFIG[0].limit,
-  1: TIER_CONFIG[1].limit,
-  2: TIER_CONFIG[2].limit,
-};
+export async function getTierLimits(): Promise<Record<Tier, number>> {
+  const config = await getPlatformConfig();
+  return {
+    0: config.tiers[0]?.limit ?? 0,
+    1: config.tiers[1]?.limit ?? 1,
+    2: config.tiers[2]?.limit ?? 2,
+  };
+}
 
 /**
  * Checks whether a user is eligible to claim a subdomain.
@@ -57,6 +61,7 @@ export async function canClaim(userId: string): Promise<{
   current: number;
   limit: number;
 }> {
+  const config = await getPlatformConfig();
   const u = await prisma.user.findUniqueOrThrow({
     where: { id: userId },
     select: {
@@ -75,7 +80,7 @@ export async function canClaim(userId: string): Promise<{
     return { ok: true, current, limit: -1 };
   }
 
-  // Custom limit override (set by admin)
+  // Per-user subdomainLimit override (set by admin)
   if (u.subdomainLimit !== null) {
     const current = await prisma.subdomain.count({
       where: { userId, status: "active" },
@@ -94,22 +99,50 @@ export async function canClaim(userId: string): Promise<{
     return { ok: true, current, limit: u.subdomainLimit };
   }
 
+  // Global subdomain limit (platform-wide cap)
+  if (config.globalSubdomainLimit !== -1) {
+    const current = await prisma.subdomain.count({
+      where: { userId, status: "active" },
+    });
+    // Use the lower of tier limit and global limit
+    const tier = await claimTierFor(userId);
+    const tierLimits = await getTierLimits();
+    const tierLimit = tierLimits[tier];
+    const effectiveLimit = Math.min(tierLimit, config.globalSubdomainLimit);
+
+    if (effectiveLimit === 0) {
+      // Fall through to tier-based messaging below
+    } else if (current >= effectiveLimit) {
+      return {
+        ok: false,
+        reason: `You've reached the platform limit of ${effectiveLimit} subdomain${effectiveLimit === 1 ? "" : "s"}.`,
+        current,
+        limit: effectiveLimit,
+      };
+    } else {
+      return { ok: true, current, limit: effectiveLimit };
+    }
+  }
+
   // Standard tier-based limits
   const tier = await claimTierFor(userId);
-  const limit = TIER_LIMITS[tier];
+  const tierLimits = await getTierLimits();
+  const limit = tierLimits[tier];
 
   // Tier 0: not eligible yet
   if (limit === 0) {
     let reason: string;
     if (!u.githubEmailVerified) {
-      reason = "You need to verify your GitHub email to claim a subdomain. Go to GitHub Settings → Emails → Verify your primary email, then sign in again.";
+      reason =
+        "You need to verify your GitHub email to claim a subdomain. Go to GitHub Settings → Emails → Verify your primary email, then sign in again.";
     } else if (!u.githubCreatedAt) {
-      reason = "Your GitHub account age couldn't be determined. Please sign out and sign back in with GitHub.";
+      reason =
+        "Your GitHub account age couldn't be determined. Please sign out and sign back in with GitHub.";
     } else {
       const daysOld = Math.floor(
         (Date.now() - u.githubCreatedAt.getTime()) / (1000 * 60 * 60 * 24)
       );
-      const minDays = TIER_CONFIG[1]?.minDays ?? 30;
+      const minDays = config.tiers[1]?.minDays ?? 30;
       const daysNeeded = minDays - daysOld;
       reason = `Your GitHub account is ${daysOld} day${daysOld === 1 ? "" : "s"} old. You need to be at least ${minDays} days old to claim a subdomain — ${daysNeeded} more day${daysNeeded === 1 ? "" : "s"} to go.`;
     }
@@ -129,7 +162,7 @@ export async function canClaim(userId: string): Promise<{
               (1000 * 60 * 60 * 24 * 30)
           )
         : 0;
-      const nextTier = TIER_CONFIG[2];
+      const nextTier = config.tiers[2];
       const monthsNeeded = nextTier
         ? Math.floor(nextTier.minDays / 30)
         : 6;

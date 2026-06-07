@@ -4,7 +4,7 @@ import { AdminNav } from '@/components/admin-nav';
 import { UserManager } from '@/components/user-manager';
 import { getAllUsers } from '@/lib/actions';
 
-export const metadata = { title: 'Users' };
+export const metadata = { title: 'Admin — Users' };
 
 export default async function UsersPage() {
   const user = await requireAdmin();
@@ -17,7 +17,7 @@ export default async function UsersPage() {
         <div>
           <h1 className="text-2xl font-bold">Users</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {users.length} registered user{users.length !== 1 ? 's' : ''}
+            {users.length} registered user{users.length !== 1 ? 's' : ''} — manage roles and limits
           </p>
         </div>
         <AdminNav />

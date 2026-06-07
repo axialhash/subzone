@@ -141,6 +141,16 @@ model ReservedSubdomain {
   createdAt   DateTime @default(now())
 }
 
+// ── Platform Settings ───────────────────────────────────────────
+// Key-value store for platform-wide configuration.
+// Values are JSON strings. Read via getSetting() with env fallbacks.
+
+model PlatformSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
 // ── Pending Preferences ─────────────────────────────────────────
 
 model PendingPreference {

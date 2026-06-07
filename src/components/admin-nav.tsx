@@ -5,15 +5,16 @@ import { usePathname } from 'next/navigation';
 
 const links = [
   { href: '/admin', label: 'Overview' },
+  { href: '/admin/users', label: 'Users' },
+  { href: '/admin/settings', label: 'Settings' },
   { href: '/admin/reserved', label: 'Reserved' },
   { href: '/admin/allowlist', label: 'Allowlist' },
-  { href: '/admin/users', label: 'Users' },
 ];
 
 export function AdminNav() {
   const pathname = usePathname();
   return (
-    <div className="flex gap-1 border rounded-lg p-1 w-fit">
+    <div className="flex gap-1 border rounded-lg p-1 w-fit flex-wrap">
       {links.map((l) => (
         <Link
           key={l.href}
